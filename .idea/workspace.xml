@@ -4,13 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5e79f7e2-d0dc-43da-b924-e5df48542ee8" name="Changes" comment="init">
-      <change afterPath="$PROJECT_DIR$/newone.py" afterDir="false" />
+    <list default="true" id="5e79f7e2-d0dc-43da-b924-e5df48542ee8" name="Changes" comment="а ты не верила :(">
+      <change afterPath="$PROJECT_DIR$/saiTestLab2.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/event.py" beforeDir="false" afterPath="$PROJECT_DIR$/event.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/newone.py" beforeDir="false" afterPath="$PROJECT_DIR$/newone.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/truck.py" beforeDir="false" afterPath="$PROJECT_DIR$/truck.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -50,6 +49,7 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python tests.Python tests in saiTestLab2.py.executor": "Run",
     "Python.main.executor": "Run",
     "Python.newone.executor": "Run",
     "Python.simulator.executor": "Run",
@@ -83,11 +83,28 @@
       <option name="project" value="LOCAL" />
       <updated>1760618432302</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="а ты не верила :(">
+      <option name="closed" value="true" />
+      <created>1761865774509</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1761865774509</updated>
+    </task>
+    <task id="LOCAL-00003" summary="а ты не верила :(">
+      <option name="closed" value="true" />
+      <created>1761865787918</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1761865787918</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="init" />
-    <option name="LAST_COMMIT_MESSAGE" value="init" />
+    <MESSAGE value="а ты не верила :(" />
+    <option name="LAST_COMMIT_MESSAGE" value="а ты не верила :(" />
   </component>
 </project>

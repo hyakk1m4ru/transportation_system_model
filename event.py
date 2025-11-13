@@ -1,9 +1,9 @@
-#
-# from dataclasses import dataclass, field
-# from typing import Any
-# @dataclass(order=True)
-# class Event:
-#     time: float
-#     priority: int
-#     action: str = field(compare=False)
-#     payload: Any = field(compare=False, default=None)
+class Event:
+    def __init__(self, time, event_type, func, *args):
+        self.time = time
+        self.type = event_type
+        self.func = func
+        self.args = args
+
+    def __lt__(self, other):
+        return self.time < other.time

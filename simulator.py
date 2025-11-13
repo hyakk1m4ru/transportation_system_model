@@ -1,253 +1,212 @@
-# import heapq
-# import random
-# from typing import Any, List, Dict, Optional
-# import truck
-# import event
-# class Simulator:
-#     def __init__(self, params: Dict, seed: int = 42, trace: bool = False):
-#         self.params = params
-#         self.now = 0.0
-#         self.events: List[event.Event] = []
-#         self.event_counter = 0  # tie-breaker for heap
-#         self.rng = random.Random(seed)
-#         self.trace = trace
-#
-#         # state
-#         self.piles = params.get("initial_piles", 0)
-#         self.bulldozer_busy_until = 0.0  # for utilization accounting
-#         self.bulldozer_last_start = None
-#         self.loaders_total = params.get("num_loaders", 2)
-#         self.loaders_busy = 0
-#         self.loaders_busy_start_times: List[float] = []  # start times when loader becomes busy (for utilization)
-#         self.trucks = [truck.Truck(i) for i in range(params.get("num_trucks", 4))]
-#
-#         # stats
-#         self.total_loaded_trucks = 0
-#         self.sum_cycle_times = 0.0
-#         self.bulldozer_work_time = 0.0
-#         self.loader_work_time = 0.0
-#         self.last_time = 0.0
-#
-#         # for report
-#         self.samples = []
-#
-#         # init
-#         self.schedule_initial_events()
-#
-#     def log(self, msg):
-#         if self.trace:
-#             print(f"[{self.now:8.3f}] {msg}")
-#
-#     def push_event(self, time: float, action: str, payload: Any = None, priority: int = 0):
-#         self.event_counter += 1
-#         heapq.heappush(self.events, event.Event(time, priority, action, payload))
-#
-#     def schedule_initial_events(self):
-#         # first bulldozer
-#         t = self.now + self.draw_bulldozer_interval()
-#         self.push_event(t, "bulldozer_made_pile")
-#
-#         # init trucks
-#         for truck in self.trucks:
-#             truck.state = "waiting"
-#             truck.cycle_start_time = self.now
-#
-#         # Schedule first periodic report (discrete-time response)
-#         report_interval = self.params.get("report_interval", 5.0)
-#         self.push_event(self.now + report_interval, "report", {"interval": report_interval})
-#
-#     # generators
-#     def draw_bulldozer_interval(self) -> float:
-#         min_t, max_t = self.params.get("bulldozer_time_range", (6.0, 12.0))
-#         return self.rng.uniform(min_t, max_t)
-#
-#     def draw_loading_time(self) -> float:
-#         min_t, max_t = self.params.get("loading_time_range", (4.0, 8.0))
-#         return self.rng.uniform(min_t, max_t)
-#
-#     def draw_travel_to_dump(self) -> float:
-#         min_t, max_t = self.params.get("travel_to_dump_range", (3.0, 6.0))
-#         return self.rng.uniform(min_t, max_t)
-#
-#     def draw_unloading_time(self) -> float:
-#         min_t, max_t = self.params.get("unloading_time_range", (2.0, 4.0))
-#         return self.rng.uniform(min_t, max_t)
-#
-#     def draw_return_time(self) -> float:
-#         min_t, max_t = self.params.get("return_time_range", (3.0, 6.0))
-#         return self.rng.uniform(min_t, max_t)
-#
-#     # event handlers
-#     def handle_bulldozer_made_pile(self, ev):
-#         # create pile
-#         self.log("Bulldozer created a pile")
-#         # work amount for report
-#         # work_per_push = self.params.get("bulldozer_work_per_push", 1)
-#         # self.bulldozer_work_time += work_per_push
-#
-#         self.piles += 1
-#         # try to start loading if possible
-#         self.try_start_loading()
-#
-#         # schedule next pile creation
-#         next_t = self.now + self.draw_bulldozer_interval()
-#         self.push_event(next_t, "bulldozer_made_pile")
-#
-#     def try_start_loading(self):
-#
-#         # while possible and resources available, start as many loadings as possible
-#         started = 0
-#         for truck in self.trucks:
-#             if self.loaders_busy >= self.loaders_total:
-#                 break
-#             if self.piles >= 2 and truck.state == "waiting":
-#                 # start loading
-#                 self.start_loading(truck)
-#                 started += 1
-#         if started:
-#             self.log(f"Attempted starts -> {started} loadings started")
-#
-#     def start_loading(self, truck: truck.Truck):
-#         truck.state = "loading"
-#         truck.last_loaded_time = None
-#         truck.total_cycles += 1
-#         # consume two piles
-#         self.piles -= 2
-#         self.loaders_busy += 1
-#         # record loader busy start
-#         self.loaders_busy_start_times.append(self.now)
-#         self.log(f"Truck {truck.id} started loading (piles left: {self.piles})")
-#
-#         load_time = self.draw_loading_time()
-#         self.push_event(self.now + load_time, "finish_loading", {"truck_id": truck.id, "duration": load_time})
-#
-#     def handle_finish_loading(self, ev):
-#         payload = ev
-#         truck_id = payload["truck_id"]
-#         dur = payload.get("duration", None)
-#         truck = self.trucks[truck_id]
-#         truck.state = "traveling"
-#         truck.last_loaded_time = self.now
-#
-#         # loader free
-#         self.loaders_busy -= 1
-#         start_time = None
-#         if self.loaders_busy_start_times:
-#             start_time = self.loaders_busy_start_times.pop(0)
-#             self.loader_work_time += (self.now - start_time)
-#         self.log(f"Truck {truck.id} finished loading (load dur {dur:.3f}). Loaders busy: {self.loaders_busy}")
-#
-#         # schedule travel to dump completion
-#         travel = self.draw_travel_to_dump()
-#         self.push_event(self.now + travel, "arrive_dump", {"truck_id": truck.id, "travel": travel})
-#
-#         # after freeing loader, maybe other waiting trucks can start loading
-#         self.try_start_loading()
-#
-#     def handle_arrive_dump(self, ev):
-#         truck_id = ev["truck_id"]
-#         truck = self.trucks[truck_id]
-#         truck.state = "unloading"
-#         self.log(f"Truck {truck.id} arrived at dump and starts unloading")
-#         unload = self.draw_unloading_time()
-#         self.push_event(self.now + unload, "finish_unloading", {"truck_id": truck.id, "unload": unload})
-#
-#     def handle_finish_unloading(self, ev):
-#         truck_id = ev["truck_id"]
-#         truck = self.trucks[truck_id]
-#         truck.state = "returning"
-#         self.log(f"Truck {truck.id} finished unloading, returning empty")
-#         # truck cycle complete: record cycle time
-#         if truck.cycle_start_time is not None:
-#             cycle_time = self.now - truck.cycle_start_time
-#             self.total_loaded_trucks += 1
-#             self.sum_cycle_times += cycle_time
-#             self.log(f"Truck {truck.id} cycle time: {cycle_time:.3f}")
-#             # reset cycle start (it will be set when returns and waits again)
-#             truck.cycle_start_time = None
-#
-#         ret = self.draw_return_time()
-#         self.push_event(self.now + ret, "truck_returned", {"truck_id": truck.id, "ret": ret})
-#
-#     def handle_truck_returned(self, ev):
-#         truck_id = ev["truck_id"]
-#         truck = self.trucks[truck_id]
-#         truck.state = "waiting"
-#         truck.cycle_start_time = self.now
-#         self.log(f"Truck {truck.id} returned and is waiting for load")
-#         # perhaps we can start loading now
-#         self.try_start_loading()
-#
-#     def handle_report(self, ev):
-#         interval = ev["interval"]
-#         # sample interesting variables (discrete-time response)
-#         sample = {
-#             "time": self.now,
-#             "piles": self.piles,
-#             "loaders_busy": self.loaders_busy,
-#             "trucks_states": [t.state for t in self.trucks],
-#             "total_loaded_trucks": self.total_loaded_trucks
-#         }
-#         self.samples.append(sample)
-#         self.log(f"REPORT: piles={self.piles}, loaders_busy={self.loaders_busy}, loaded={self.total_loaded_trucks}")
-#         # schedule next report
-#         self.push_event(self.now + interval, "report", {"interval": interval})
-#
-#     # main loop
-#     def run(self, until: float = None, max_loaded: Optional[int] = None):
-#         stop_time = until if until is not None else float('inf')
-#         while self.events:
-#             ev = heapq.heappop(self.events)
-#             # advance time
-#             if ev.time > stop_time:
-#                 self.now = stop_time
-#                 break
-#             self.now = ev.time
-#             action = ev.action
-#             payload = ev.payload or {}
-#             # dispatch
-#             if action == "bulldozer_made_pile":
-#                 self.handle_bulldozer_made_pile(payload)
-#             elif action == "finish_loading":
-#                 self.handle_finish_loading(payload)
-#             elif action == "arrive_dump":
-#                 self.handle_arrive_dump(payload)
-#             elif action == "finish_unloading":
-#                 self.handle_finish_unloading(payload)
-#             elif action == "truck_returned":
-#                 self.handle_truck_returned(payload)
-#             elif action == "report":
-#                 self.handle_report(payload)
-#             else:
-#                 self.log(f"Unknown event {action}")
-#
-#             # stopping condition by number of loaded trucks
-#             if max_loaded is not None and self.total_loaded_trucks >= max_loaded:
-#                 self.log(f"Reached target total_loaded_trucks={self.total_loaded_trucks}, stopping.")
-#                 break
-#
-#         # calculating result work time for loaders
-#         # + partial time if work not finished
-#         while self.loaders_busy_start_times:
-#             start = self.loaders_busy_start_times.pop(0)
-#             self.loader_work_time += max(0.0, self.now - start)
-#         # bulldozer_work_time recorded approximately per push; OK for rough metric
-#
-#         return self.report_results()
-#
-#     # Reporting
-#     def report_results(self):
-#         avg_cycle = (self.sum_cycle_times / self.total_loaded_trucks) if self.total_loaded_trucks > 0 else None
-#         loader_util = (self.loader_work_time / self.now) / max(1, self.loaders_total) if self.now > 0 else None
-#         bulldozer_util = (self.bulldozer_work_time / self.now) if self.now > 0 else None
-#         result = {
-#             "sim_time": self.now,
-#             "total_loaded_trucks": self.total_loaded_trucks,
-#             "avg_cycle_time": avg_cycle,
-#             "loader_utilization_per_machine": loader_util,
-#             "bulldozer_utilization": bulldozer_util,
-#             "final_piles": self.piles,
-#             "samples": self.samples,
-#             "trucks_states": [t.state for t in self.trucks]
-#         }
-#         return result
+import heapq
+import random
+
+from event import Event
+
+
+class Simulation:
+    def __init__(self, params):
+        self.t = 0.0
+        self.last_t = 0.0
+        self.events = []
+        self.params = params
+
+        self.stats = {
+            "delivered_heaps": 0,
+            "orders_completed": 0,
+            "trips": 0,
+            # time series sampled at event times: list of (time, value)
+            "busy_trucks": [],
+            "busy_loaders": [],
+            "bulldozer_busy": [],
+            "avg_prep_time": [],
+        }
+
+        self.resources = {"bulldozer": 1, "loaders": 2, "trucks": 4}
+        self.busy = {"bulldozer": 0, "loaders": 0, "trucks": 0}
+        self.area_busy = {r: 0.0 for r in self.resources}  # интеграл занятости по времени (unit-seconds)
+        self.heaps = 0
+        self.orders = []
+        self.active_orders = {}
+        self.stop_flag = False
+
+    def schedule(self, delay, event_type, func, *args):
+        heapq.heappush(self.events, Event(self.t + delay, event_type, func, *args))
+
+    def trace(self, msg):
+        if self.params.get("tracing"):
+            print(f"[{self.t:.1f}] {msg}")
+
+    def trace_state(self):
+        if self.params.get("tracing"):
+            self.trace(
+                f"Состояние: занятых самосвалов={self.busy['trucks']}, "
+                f"погрузчиков={self.busy['loaders']}, "
+                f"бульдозер={self.busy['bulldozer']}"
+            )
+
+    def sample(self, mean):
+        return random.expovariate(1.0 / mean)
+
+    def record_state(self):
+        # сохраняем снимок состояния в момент времени self.t
+        self.stats["busy_trucks"].append((self.t, self.busy["trucks"]))
+        self.stats["busy_loaders"].append((self.t, self.busy["loaders"]))
+        self.stats["bulldozer_busy"].append((self.t, self.busy["bulldozer"]))
+
+    # -------------------- ПРОЦЕССЫ --------------------
+
+    def start(self):
+        self.schedule(0, "order_arrival", self.order_arrival)
+        self.schedule(0, "heap_formation", self.form_heap)
+        self.record_state()
+        self.last_t = self.t
+
+        while self.events and self.t < self.params["SIM_TIME"] and not self.stop_flag:
+            ev = heapq.heappop(self.events)
+            # интегрируем занятость за интервал [self.t, ev.time)
+            dt = max(0.0, ev.time - self.t)
+            if dt > 0:
+                for r in self.busy:
+                    # area_busy хранит суммарное число занятых единиц * время
+                    self.area_busy[r] += self.busy[r] * dt
+            # продвигаем время
+            self.t = ev.time
+            ev.func(*ev.args)
+            self.record_state()
+            self.last_t = self.t
+
+        # учесть остаток времени до конца моделирования (если нужно)
+        if self.t < self.params["SIM_TIME"]:
+            dt = self.params["SIM_TIME"] - self.t
+            for r in self.busy:
+                self.area_busy[r] += self.busy[r] * dt
+            self.t = self.params["SIM_TIME"]
+            self.record_state()
+
+        self.finish()
+
+    def order_arrival(self):
+        if len(self.orders) >= self.params["MAX_ORDERS"]:
+            self.trace("Достигнут лимит заказов, новые не создаются")
+            return
+
+        order_id = len(self.orders)
+        n_heaps = random.randint(3, 7)
+        self.orders.append(n_heaps)
+        self.active_orders[order_id] = {"required": n_heaps, "done": 0, "start": self.t}
+        self.trace(f"Новый заказ {order_id}: {n_heaps} куч")
+        self.try_loading()
+
+        if len(self.orders) < self.params["MAX_ORDERS"]:
+            self.schedule(
+                self.sample(self.params["order_interarrival_mean"]),
+                "order_arrival",
+                self.order_arrival,
+            )
+
+    def form_heap(self):
+        if self.busy["bulldozer"] < self.resources["bulldozer"]:
+            self.busy["bulldozer"] = 1
+            delay = self.sample(self.params["heap_formation_mean"])
+            self.schedule(delay, "heap_ready", self.heap_ready)
+            self.trace("Бульдозер формирует кучу")
+            self.trace_state()
+            # записать состояние сразу после изменения
+            self.record_state()
+        else:
+            self.trace("Бульдозер занят")
+
+    def heap_ready(self):
+        self.busy["bulldozer"] = 0
+        self.heaps += 1
+        self.trace(f"Новая куча готова, всего куч: {self.heaps}")
+        # записать состояние сразу после изменения
+        self.record_state()
+        self.try_loading()
+        self.schedule(0, "heap_formation", self.form_heap)
+
+    def try_loading(self):
+        # запускаем загрузки, пока есть ресурсы, груды и заказы
+        while (
+            self.busy["loaders"] < self.resources["loaders"]
+            and self.busy["trucks"] < self.resources["trucks"]
+            and self.heaps >= 2
+            and any(o["done"] < o["required"] for o in self.active_orders.values())
+        ):
+            self.start_loading()
+
+    def start_loading(self):
+        order_id = next(k for k, o in self.active_orders.items() if o["done"] < o["required"])
+        self.busy["loaders"] += 1
+        self.busy["trucks"] += 1
+        self.heaps -= 2
+        delay = (
+            self.sample(self.params["loading_time_mean"])
+            if self.params["stochastic_loading"]
+            else self.params["loading_time_mean"]
+        )
+        self.schedule(delay, "loading_done", self.loading_done, order_id)
+        self.trace(f"Начата загрузка для заказа {order_id}")
+        self.trace_state()
+        self.record_state()
+
+    def loading_done(self, order_id):
+        self.busy["loaders"] -= 1
+        # изменили состояние — записать
+        self.record_state()
+        travel_time = self.sample(self.params["travel_time_mean"]) if self.params["stochastic_travel"] else self.params["travel_time_mean"]
+        self.trace(f"Самосвал {order_id}-го заказа выехал к месту разгрузки, время в пути {travel_time:.1f}")
+        self.schedule(travel_time, "truck_arrive", self.truck_arrive, order_id)
+
+    def truck_arrive(self, order_id):
+        self.trace(f"Самосвал {order_id}-го заказа прибыл к месту разгрузки")
+        self.stats["delivered_heaps"] += 2
+        unload_time = 5  # фиксированное или случайное время разгрузки
+        self.trace(f"Самосвал {order_id}-го заказа разгружается, время разгрузки {unload_time}")
+        self.schedule(unload_time, "truck_return", self.truck_return, order_id)
+
+    def truck_return(self, order_id):
+        self.busy["trucks"] -= 1
+        self.trace(f"Самосвал {order_id}-го заказа вернулся и освобождён")
+        self.stats["delivered_heaps"] += 2
+        self.stats["trips"] += 1
+        # записать состояние после изменения
+        self.record_state()
+
+        if order_id not in self.active_orders:
+            self.try_loading()
+            return
+
+        order = self.active_orders[order_id]
+        order["done"] += 2
+
+        if order["done"] >= order["required"]:
+            self.stats["orders_completed"] += 1
+            prep_time = self.t - order["start"]
+            self.stats["avg_prep_time"].append(prep_time)
+            self.trace(f"Заказ {order_id} завершён, время подготовки {prep_time:.1f}")
+            del self.active_orders[order_id]
+
+            # если достигнуто нужное число завершённых заказов — остановка моделирования
+            if self.stats["orders_completed"] >= self.params["MAX_ORDERS"]:
+                self.trace("Достигнуто максимальное число выполненных заказов. Симуляция завершается.")
+                self.stop_flag = True
+                return
+
+        self.try_loading()
+
+    def finish(self):
+        # среднее время подготовки
+        if self.stats["avg_prep_time"]:
+            self.stats["avg_prep_time_mean"] = sum(self.stats["avg_prep_time"]) / len(self.stats["avg_prep_time"])
+        else:
+            self.stats["avg_prep_time_mean"] = float("nan")
+
+        # средняя загрузка по времени (fraction of total capacity)
+        utilization = {}
+        sim_time = float(self.params["SIM_TIME"])
+        for r in self.resources:
+            # превращаем unit-seconds в долю от (resources[r] * SIM_TIME)
+            utilization[r] = self.area_busy[r] / (self.resources[r] * sim_time)
+        self.stats["utilization"] = utilization
